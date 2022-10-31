@@ -19,6 +19,11 @@ import (
 	"time"
 )
 
+const (
+	lockType    = 1
+	tryLockType = 2
+)
+
 type etcdLock struct {
 	addr    string
 	isInit  atomic.Bool
@@ -28,6 +33,14 @@ type etcdLock struct {
 }
 
 func (e *etcdLock) Lock(ctx context.Context, key string) (Unlocker, error) {
+	return e.doLock(ctx, key, lockType)
+}
+
+func (e *etcdLock) TryLock(ctx context.Context, key string) (Unlocker, error) {
+	return e.doLock(ctx, key, tryLockType)
+}
+
+func (e *etcdLock) doLock(ctx context.Context, key string, t int) (Unlocker, error) {
 	if !e.isInit.Load() {
 		e.init()
 		return nil, errors.New("not init")
@@ -35,7 +48,13 @@ func (e *etcdLock) Lock(ctx context.Context, key string) (Unlocker, error) {
 
 	prefix := fmt.Sprintf("/dLock/%s", key)
 	mutex := concurrency.NewMutex(e.session, prefix)
-	err := mutex.Lock(ctx)
+	var err error
+	if t == lockType {
+		err = mutex.Lock(ctx)
+	} else {
+		err = mutex.TryLock(ctx)
+	}
+
 	if err != nil {
 		return nil, err
 	}

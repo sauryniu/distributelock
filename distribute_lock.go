@@ -20,6 +20,7 @@ const (
 )
 
 type DistributeLock interface {
+	TryLock(ctx context.Context, key string) (Unlocker, error)
 	Lock(ctx context.Context, key string) (Unlocker, error)
 }
 
