@@ -70,7 +70,7 @@ func (e *etcdLock) doLock(ctx context.Context, key string, t int) (Unlocker, err
 func (e *etcdLock) init() {
 	var err error
 	e.client, err = v3.New(v3.Config{
-		Endpoints:   []string{"10.1.30.79:12379"},
+		Endpoints:   []string{e.addr},
 		DialTimeout: time.Second * 10,
 	})
 
