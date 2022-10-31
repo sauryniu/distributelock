@@ -46,7 +46,7 @@ func TestNewDistributeLock(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			locker := NewDistributeLock(tt.args.serverAddr, tt.args.ttl)
+			locker := NewDistributeLock(tt.args.serverAddr, tt.args.ttl, EtcdLock)
 			for _, arg := range tt.args2 {
 				fmt.Println(arg.key)
 				unlocker, err := locker.Lock(context.Background(), arg.key)

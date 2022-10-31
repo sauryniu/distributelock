@@ -13,10 +13,20 @@ import "context"
 
 type Unlocker func(ctx context.Context) error
 
+type LockType int
+
+const (
+	EtcdLock LockType = 0
+)
+
 type DistributeLock interface {
 	Lock(ctx context.Context, key string) (Unlocker, error)
 }
 
-func NewDistributeLock(serverAddr string, ttl int) DistributeLock {
-	return newEtcdLock(serverAddr, ttl)
+func NewDistributeLock(serverAddr string, ttl int, lockType LockType) DistributeLock {
+	switch lockType {
+	case EtcdLock:
+		newEtcdLock(serverAddr, ttl)
+	}
+	return nil
 }
