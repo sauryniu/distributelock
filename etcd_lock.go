@@ -40,7 +40,10 @@ func (e *etcdLock) Lock(ctx context.Context, key string) (Unlocker, error) {
 		return nil, err
 	}
 	unlocker := func(ctx2 context.Context) error {
-		return mutex.Unlock(ctx2)
+		cmp := mutex.IsOwner()
+		del := v3.OpDelete(mutex.Key())
+		_, err2 := e.client.Txn(ctx2).If(cmp).Then(del).Commit()
+		return err2
 	}
 	return unlocker, nil
 }
