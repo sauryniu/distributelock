@@ -26,7 +26,7 @@ type DistributeLock interface {
 func NewDistributeLock(serverAddr string, ttl int, lockType LockType) DistributeLock {
 	switch lockType {
 	case EtcdLock:
-		newEtcdLock(serverAddr, ttl)
+		return newEtcdLock(serverAddr, ttl)
 	}
 	return nil
 }
