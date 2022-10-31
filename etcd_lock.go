@@ -11,13 +11,10 @@ package distributelock
 
 import (
 	"context"
-	"crypto/rand"
 	"errors"
 	"fmt"
 	v3 "go.etcd.io/etcd/client/v3"
 	"go.etcd.io/etcd/client/v3/concurrency"
-	"math"
-	"math/big"
 	"sync/atomic"
 	"time"
 )
@@ -35,13 +32,10 @@ func (e *etcdLock) Lock(ctx context.Context, key string) (Unlocker, error) {
 		e.init()
 		return nil, errors.New("not init")
 	}
-	r, err := rand.Int(rand.Reader, big.NewInt(math.MaxInt))
-	if err != nil {
-		return nil, err
-	}
-	prefix := fmt.Sprintf("/dLock/%s/%d", key, r)
+
+	prefix := fmt.Sprintf("/dLock/%s", key)
 	mutex := concurrency.NewMutex(e.session, prefix)
-	err = mutex.Lock(ctx)
+	err := mutex.Lock(ctx)
 	if err != nil {
 		return nil, err
 	}
