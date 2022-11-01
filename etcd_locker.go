@@ -24,15 +24,31 @@ const (
 	tryLockType = 2
 )
 
+var notInitErr = errors.New("etcd locker: The locker was not initialized")
+
 type etcdLock struct {
-	addr    string
-	isInit  atomic.Bool
-	client  *v3.Client
-	session *concurrency.Session
-	ttl     int
+	addr     string
+	initFlag atomic.Bool
+	client   *v3.Client
+	ttl      int
 }
 
-func (e *etcdLock) Lock(ctx context.Context, key string) (Unlocker, error) {
+func (e *etcdLock) Lock(ctx context.Context, key string, ops ...OpOption) (Unlocker, error) {
+	op := &Op{ttl: defaultWaitSeconds}
+	for _, opt := range ops {
+		opt(op)
+	}
+
+	var cancel context.CancelFunc
+	if op.ttl > 0 {
+		ctx, cancel = context.WithTimeout(ctx, time.Second*time.Duration(op.ttl))
+	}
+	defer func() {
+		if cancel != nil {
+			cancel()
+		}
+	}()
+
 	return e.doLock(ctx, key, lockType)
 }
 
@@ -41,14 +57,18 @@ func (e *etcdLock) TryLock(ctx context.Context, key string) (Unlocker, error) {
 }
 
 func (e *etcdLock) doLock(ctx context.Context, key string, t int) (Unlocker, error) {
-	if !e.isInit.Load() {
-		e.init()
-		return nil, errors.New("not init")
+	if !e.isInit() {
+		return nil, notInitErr
 	}
 
-	prefix := fmt.Sprintf("/dLock/%s", key)
-	mutex := concurrency.NewMutex(e.session, prefix)
-	var err error
+	session, err := concurrency.NewSession(e.client, concurrency.WithTTL(e.ttl))
+	if err != nil {
+		return nil, err
+	}
+
+	lockKey := fmt.Sprintf("/dLock/%s", key)
+	mutex := concurrency.NewMutex(session, lockKey)
+
 	if t == lockType {
 		err = mutex.Lock(ctx)
 	} else {
@@ -59,10 +79,7 @@ func (e *etcdLock) doLock(ctx context.Context, key string, t int) (Unlocker, err
 		return nil, err
 	}
 	unlocker := func(ctx2 context.Context) error {
-		cmp := mutex.IsOwner()
-		del := v3.OpDelete(mutex.Key())
-		_, err2 := e.client.Txn(ctx2).If(cmp).Then(del).Commit()
-		return err2
+		return mutex.Unlock(ctx)
 	}
 	return unlocker, nil
 }
@@ -79,13 +96,14 @@ func (e *etcdLock) init() {
 		return
 	}
 
-	e.session, err = concurrency.NewSession(e.client, concurrency.WithTTL(e.ttl))
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
+	e.initFlag.Store(true)
+}
 
-	e.isInit.Store(true)
+func (e *etcdLock) isInit() bool {
+	if !e.initFlag.Load() {
+		e.init()
+	}
+	return e.initFlag.Load()
 }
 
 func newEtcdLock(serverAddr string, ttl int) *etcdLock {
